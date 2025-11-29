@@ -27,10 +27,10 @@ function randomColor() {
 // LATENCY SIMULATION
 const LATENCY = 200;
 
-function sendDelayed(ws, data) {
+function sendDelayed(ws, serializedData) {
     setTimeout(() => {
         if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify(data));
+            ws.send(serializedData);
         }
     }, LATENCY);
 }
@@ -50,11 +50,11 @@ wss.on('connection', (ws) => {
     };
 
     // Send init packet to the new client (Delayed)
-    sendDelayed(ws, {
+    sendDelayed(ws, JSON.stringify({
         type: 'init',
         id: playerId,
         state: gameState
-    });
+    }));
 
     // Broadcast new player to everyone else (Delayed inside broadcast)
     broadcast({
@@ -153,9 +153,10 @@ setInterval(() => {
 }, 1000 / 30);
 
 function broadcast(data, excludeWs) {
+    const serializedData = JSON.stringify(data);
     wss.clients.forEach((client) => {
         if (client !== excludeWs) {
-            sendDelayed(client, data);
+            sendDelayed(client, serializedData);
         }
     });
 }

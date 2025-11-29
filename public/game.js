@@ -40,8 +40,8 @@ ws.onmessage = (event) => {
             players: msg.players
         });
 
-        // Keep buffer small (e.g., last 10 seconds is plenty, even 1 sec is enough)
-        if (serverUpdates.length > 30) {
+        // Keep buffer small (e.g., last 2 seconds)
+        if (serverUpdates.length > 60) {
             serverUpdates.shift();
         }
     }
@@ -97,13 +97,16 @@ function getInterpolatedState() {
     for (let i = serverUpdates.length - 1; i >= 0; i--) {
         if (serverUpdates[i].timestamp <= renderTime) {
             prev = serverUpdates[i];
-            next = serverUpdates[i + 1];
+            if (i + 1 < serverUpdates.length) {
+                next = serverUpdates[i + 1];
+            }
             break;
         }
     }
 
     if (!prev || !next) {
         // Not enough data to interpolate, return latest or null
+        // If we have at least one update, use the latest (extrapolation/snap)
         return serverUpdates.length > 0 ? serverUpdates[serverUpdates.length - 1].players : gameState.players;
     }
 
