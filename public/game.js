@@ -27,8 +27,53 @@ ws.onmessage = (event) => {
     } else if (msg.type === 'removePlayer') {
         delete gameState.players[msg.id];
         console.log('Player left:', msg.id);
+    } else if (msg.type === 'update') {
+        // Naive update for now (Part A), will add interpolation later
+        for (const id in msg.players) {
+            if (gameState.players[id]) {
+                // Update props but keep local reference if needed, 
+                // though replacing the object is fine for now
+                gameState.players[id].x = msg.players[id].x;
+                gameState.players[id].y = msg.players[id].y;
+                gameState.players[id].score = msg.players[id].score;
+                gameState.players[id].color = msg.players[id].color; // Sync color just in case
+            } else {
+                // In case we missed a join event
+                gameState.players[id] = msg.players[id];
+            }
+        }
     }
 };
+
+// Input Handling
+const keys = { w: false, a: false, s: false, d: false, ArrowUp: false, ArrowLeft: false, ArrowDown: false, ArrowRight: false };
+let lastInput = { x: 0, y: 0 };
+
+window.addEventListener('keydown', (e) => {
+    if (keys.hasOwnProperty(e.key)) {
+        keys[e.key] = true;
+        sendInput();
+    }
+});
+
+window.addEventListener('keyup', (e) => {
+    if (keys.hasOwnProperty(e.key)) {
+        keys[e.key] = false;
+        sendInput();
+    }
+});
+
+function sendInput() {
+    const x = (keys.d || keys.ArrowRight ? 1 : 0) - (keys.a || keys.ArrowLeft ? 1 : 0);
+    const y = (keys.s || keys.ArrowDown ? 1 : 0) - (keys.w || keys.ArrowUp ? 1 : 0);
+
+    if (x !== lastInput.x || y !== lastInput.y) {
+        lastInput = { x, y };
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'move', input: { x, y } }));
+        }
+    }
+}
 
 ws.onclose = () => {
     statusDiv.innerText = 'Disconnected.';
@@ -49,6 +94,11 @@ function render() {
         ctx.fillStyle = p.color;
         ctx.fillRect(p.x, p.y, 20, 20);
         
+        // Draw Score
+        ctx.fillStyle = 'white';
+        ctx.font = '12px Arial';
+        ctx.fillText(`Score: ${p.score}`, p.x, p.y - 5);
+
         // Highlight self
         if (id === myId) {
             ctx.strokeStyle = 'white';

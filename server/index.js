@@ -34,7 +34,8 @@ wss.on('connection', (ws) => {
         x: randomInt(50, 750),
         y: randomInt(50, 550),
         color: randomColor(),
-        score: 0
+        score: 0,
+        input: { x: 0, y: 0 }
     };
 
     // Send init packet to the new client
@@ -50,6 +51,19 @@ wss.on('connection', (ws) => {
         player: gameState.players[playerId]
     }, ws);
 
+    ws.on('message', (message) => {
+        try {
+            const data = JSON.parse(message);
+            if (data.type === 'move') {
+                if (gameState.players[playerId]) {
+                    gameState.players[playerId].input = data.input; // {x: -1|0|1, y: -1|0|1}
+                }
+            }
+        } catch (e) {
+            console.error('Invalid message:', message);
+        }
+    });
+
     ws.on('close', () => {
         console.log(`Client disconnected: ${playerId}`);
         delete gameState.players[playerId];
@@ -59,6 +73,36 @@ wss.on('connection', (ws) => {
         });
     });
 });
+
+const SPEED = 5;
+const MAP_WIDTH = 800;
+const MAP_HEIGHT = 600;
+const PLAYER_SIZE = 20;
+
+// Game Loop (60Hz) - Physics/Logic
+setInterval(() => {
+    for (const id in gameState.players) {
+        const p = gameState.players[id];
+        if (p.input) {
+            p.x += p.input.x * SPEED;
+            p.y += p.input.y * SPEED;
+
+            // Boundary checks
+            if (p.x < 0) p.x = 0;
+            if (p.x > MAP_WIDTH - PLAYER_SIZE) p.x = MAP_WIDTH - PLAYER_SIZE;
+            if (p.y < 0) p.y = 0;
+            if (p.y > MAP_HEIGHT - PLAYER_SIZE) p.y = MAP_HEIGHT - PLAYER_SIZE;
+        }
+    }
+}, 1000 / 60);
+
+// Broadcast Loop (30Hz) - Network
+setInterval(() => {
+    broadcast({
+        type: 'update',
+        players: gameState.players
+    });
+}, 1000 / 30);
 
 function broadcast(data, excludeWs) {
     wss.clients.forEach((client) => {
