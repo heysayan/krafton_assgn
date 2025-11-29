@@ -7,6 +7,8 @@ const ws = new WebSocket(`${protocol}://${window.location.host}`);
 
 let myId = null;
 let gameState = { players: {}, coins: [] };
+let serverUpdates = [];
+const INTERPOLATION_DELAY = 100; // ms to buffer updates
 
 ws.onopen = () => {
     statusDiv.innerText = 'Connected. Waiting for data...';
@@ -22,26 +24,25 @@ ws.onmessage = (event) => {
         statusDiv.innerText = `Connected as ${myId}`;
         console.log('Game initialized:', gameState);
     } else if (msg.type === 'newPlayer') {
+        // We can just rely on the update loop to populate this, 
+        // or add it immediately to prevent errors before first update
         gameState.players[msg.player.id] = msg.player;
         console.log('New player joined:', msg.player.id);
     } else if (msg.type === 'removePlayer') {
         delete gameState.players[msg.id];
         console.log('Player left:', msg.id);
     } else if (msg.type === 'update') {
-        // Naive update for now (Part A), will add interpolation later
-        gameState.coins = msg.coins; // Sync coins
-        for (const id in msg.players) {
-            if (gameState.players[id]) {
-                // Update props but keep local reference if needed, 
-                // though replacing the object is fine for now
-                gameState.players[id].x = msg.players[id].x;
-                gameState.players[id].y = msg.players[id].y;
-                gameState.players[id].score = msg.players[id].score;
-                gameState.players[id].color = msg.players[id].color; // Sync color just in case
-            } else {
-                // In case we missed a join event
-                gameState.players[id] = msg.players[id];
-            }
+        // Store update for interpolation
+        gameState.coins = msg.coins; // Sync coins directly (no interpolation needed for static spawn/despawn usually, or can be added if they moved)
+        
+        serverUpdates.push({
+            timestamp: Date.now(),
+            players: msg.players
+        });
+
+        // Keep buffer small (e.g., last 10 seconds is plenty, even 1 sec is enough)
+        if (serverUpdates.length > 30) {
+            serverUpdates.shift();
         }
     }
 };
@@ -86,6 +87,51 @@ ws.onerror = (err) => {
     console.error('WebSocket error:', err);
 };
 
+function getInterpolatedState() {
+    const renderTime = Date.now() - INTERPOLATION_DELAY;
+
+    // Find two updates surrounding renderTime
+    let prev = null;
+    let next = null;
+
+    for (let i = serverUpdates.length - 1; i >= 0; i--) {
+        if (serverUpdates[i].timestamp <= renderTime) {
+            prev = serverUpdates[i];
+            next = serverUpdates[i + 1];
+            break;
+        }
+    }
+
+    if (!prev || !next) {
+        // Not enough data to interpolate, return latest or null
+        return serverUpdates.length > 0 ? serverUpdates[serverUpdates.length - 1].players : gameState.players;
+    }
+
+    const timeWindow = next.timestamp - prev.timestamp;
+    const ratio = (renderTime - prev.timestamp) / timeWindow;
+    
+    const interpolatedPlayers = {};
+    
+    // Interpolate each player present in both updates
+    for (const id in next.players) {
+        if (prev.players[id]) {
+            const p1 = prev.players[id];
+            const p2 = next.players[id];
+            
+            interpolatedPlayers[id] = {
+                ...p2, // Copy other props like color, score
+                x: p1.x + (p2.x - p1.x) * ratio,
+                y: p1.y + (p2.y - p1.y) * ratio
+            };
+        } else {
+            // New player in 'next', just snap to it
+            interpolatedPlayers[id] = next.players[id];
+        }
+    }
+    
+    return interpolatedPlayers;
+}
+
 function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
@@ -97,9 +143,11 @@ function render() {
         ctx.fill();
     }
 
-    // Render Players
-    for (const id in gameState.players) {
-        const p = gameState.players[id];
+    // Render Interpolated Players
+    const playersToRender = getInterpolatedState();
+
+    for (const id in playersToRender) {
+        const p = playersToRender[id];
         ctx.fillStyle = p.color;
         ctx.fillRect(p.x, p.y, 20, 20);
         
