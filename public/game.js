@@ -29,6 +29,7 @@ ws.onmessage = (event) => {
         console.log('Player left:', msg.id);
     } else if (msg.type === 'update') {
         // Naive update for now (Part A), will add interpolation later
+        gameState.coins = msg.coins; // Sync coins
         for (const id in msg.players) {
             if (gameState.players[id]) {
                 // Update props but keep local reference if needed, 
@@ -88,6 +89,14 @@ ws.onerror = (err) => {
 function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
+    // Render Coins
+    ctx.fillStyle = 'gold';
+    for (const coin of gameState.coins) {
+        ctx.beginPath();
+        ctx.arc(coin.x, coin.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
     // Render Players
     for (const id in gameState.players) {
         const p = gameState.players[id];

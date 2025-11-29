@@ -78,6 +78,20 @@ const SPEED = 5;
 const MAP_WIDTH = 800;
 const MAP_HEIGHT = 600;
 const PLAYER_SIZE = 20;
+const COIN_RADIUS = 5;
+const MAX_COINS = 10;
+
+// Coin Spawner
+setInterval(() => {
+    if (gameState.coins.length < MAX_COINS) {
+        const id = 'coin_' + Date.now() + '_' + Math.random();
+        gameState.coins.push({
+            id: id,
+            x: randomInt(20, MAP_WIDTH - 20),
+            y: randomInt(20, MAP_HEIGHT - 20)
+        });
+    }
+}, 3000);
 
 // Game Loop (60Hz) - Physics/Logic
 setInterval(() => {
@@ -92,6 +106,25 @@ setInterval(() => {
             if (p.x > MAP_WIDTH - PLAYER_SIZE) p.x = MAP_WIDTH - PLAYER_SIZE;
             if (p.y < 0) p.y = 0;
             if (p.y > MAP_HEIGHT - PLAYER_SIZE) p.y = MAP_HEIGHT - PLAYER_SIZE;
+
+            // Coin Collision
+            // Player center
+            const px = p.x + PLAYER_SIZE / 2;
+            const py = p.y + PLAYER_SIZE / 2;
+
+            for (let i = gameState.coins.length - 1; i >= 0; i--) {
+                const c = gameState.coins[i];
+                const dx = px - c.x;
+                const dy = py - c.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                // Collision threshold: Player Half Size + Coin Radius
+                if (distance < (PLAYER_SIZE / 2 + COIN_RADIUS)) {
+                    // Collected
+                    p.score += 1;
+                    gameState.coins.splice(i, 1);
+                }
+            }
         }
     }
 }, 1000 / 60);
@@ -100,7 +133,8 @@ setInterval(() => {
 setInterval(() => {
     broadcast({
         type: 'update',
-        players: gameState.players
+        players: gameState.players,
+        coins: gameState.coins
     });
 }, 1000 / 30);
 
