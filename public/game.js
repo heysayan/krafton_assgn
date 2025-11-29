@@ -8,7 +8,7 @@ const ws = new WebSocket(`${protocol}://${window.location.host}`);
 let myId = null;
 let gameState = { players: {}, coins: [] };
 let serverUpdates = [];
-const INTERPOLATION_DELAY = 100; // ms to buffer updates
+const INTERPOLATION_DELAY = 150; // ms to buffer updates
 
 ws.onopen = () => {
     statusDiv.innerText = 'Connected. Waiting for data...';
