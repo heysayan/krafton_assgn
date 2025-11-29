@@ -24,6 +24,17 @@ function randomColor() {
     return '#' + Math.floor(Math.random()*16777215).toString(16);
 }
 
+// LATENCY SIMULATION
+const LATENCY = 200;
+
+function sendDelayed(ws, data) {
+    setTimeout(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify(data));
+        }
+    }, LATENCY);
+}
+
 wss.on('connection', (ws) => {
     const playerId = 'player_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
     console.log(`Client connected: ${playerId}`);
@@ -38,30 +49,33 @@ wss.on('connection', (ws) => {
         input: { x: 0, y: 0 }
     };
 
-    // Send init packet to the new client
-    ws.send(JSON.stringify({
+    // Send init packet to the new client (Delayed)
+    sendDelayed(ws, {
         type: 'init',
         id: playerId,
         state: gameState
-    }));
+    });
 
-    // Broadcast new player to everyone else
+    // Broadcast new player to everyone else (Delayed inside broadcast)
     broadcast({
         type: 'newPlayer',
         player: gameState.players[playerId]
     }, ws);
 
     ws.on('message', (message) => {
-        try {
-            const data = JSON.parse(message);
-            if (data.type === 'move') {
-                if (gameState.players[playerId]) {
-                    gameState.players[playerId].input = data.input; // {x: -1|0|1, y: -1|0|1}
+        // Simulate Network Latency on Receive
+        setTimeout(() => {
+            try {
+                const data = JSON.parse(message);
+                if (data.type === 'move') {
+                    if (gameState.players[playerId]) {
+                        gameState.players[playerId].input = data.input; // {x: -1|0|1, y: -1|0|1}
+                    }
                 }
+            } catch (e) {
+                console.error('Invalid message:', message);
             }
-        } catch (e) {
-            console.error('Invalid message:', message);
-        }
+        }, LATENCY);
     });
 
     ws.on('close', () => {
@@ -140,8 +154,8 @@ setInterval(() => {
 
 function broadcast(data, excludeWs) {
     wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN && client !== excludeWs) {
-            client.send(JSON.stringify(data));
+        if (client !== excludeWs) {
+            sendDelayed(client, data);
         }
     });
 }
